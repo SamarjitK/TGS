@@ -3,8 +3,9 @@ from runtime.rpc import trainer_client
 import argparse
 import utils
 import time
-import threading
 import os
+
+REPORT_INTERVAL = 2.0
 
 
 class Trainer(object):
@@ -28,9 +29,9 @@ class Trainer(object):
 
     def init_stats(self):
         self._last_report_time = time.time()
+        self._report_interval = REPORT_INTERVAL
         LOG_FILE_PATH = os.getenv('TGS_LOG_FILE_PATH')
         self._fd = open(LOG_FILE_PATH, 'w') if LOG_FILE_PATH != None else None
-        print(f'LOG_FILE_PATH: {self._fd}')
     
 
     def update_stats(self, iteration_time):
@@ -42,15 +43,18 @@ class Trainer(object):
     def record(self, iteration_time):
         self.update_stats(iteration_time)
 
-        if time.time() - self._last_report_time >= 10:
-            self._client_for_scheduler.report_stats(self._job_id, self._finished_iteraions)
-            self._finished_iteraions = 0
+        if time.time() - self._last_report_time >= self._report_interval:
             self._last_report_time = time.time()
+            if self._client_for_scheduler.report_stats(self._job_id, self._finished_iteraions):
+                self._finished_iteraions = 0
 
 
     def close(self):
-        self._client_for_scheduler.report_stats(self._job_id, self._finished_iteraions)
-        self._finished_iteraions = 0
+        for _ in range(5):
+            if self._client_for_scheduler.report_stats(self._job_id, self._finished_iteraions):
+                self._finished_iteraions = 0
+                return
+            time.sleep(0.2)
 
 
 if __name__  == '__main__':

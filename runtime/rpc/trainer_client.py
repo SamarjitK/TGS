@@ -44,7 +44,9 @@ class TrainerClientForScheduler(object):
             with grpc.insecure_channel(self.addr) as channel:
                 request = ReportStatsRequest(job_id=job_id, finished_iterations=finished_iterations)
                 stub = t2s_rpc.TrainerToSchedulerStub(channel)
-                response = stub.ReportStats(request)
-                assert response.success == True
+                response = stub.ReportStats(request, timeout=1.0)
+            assert response.success == True
+            return True
         except Exception as e:
             self._logger.info(f'job {job_id}, report, fail, {e}')
+            return False

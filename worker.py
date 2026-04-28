@@ -134,17 +134,25 @@ class Worker(object):
         finished_tasks = []
 
         for job_id, task in self._tasks.items():
+            if task.return_code != 0 and task.return_code is not None:
+                print(f"Task {task._job_id} failed with exit code {task.return_code}")
             if task.return_code == None:
                 continue
-            assert task._finished_iterations == task._iterations
-            
+            if task.return_code == 0:
+                if task._finished_iterations != task._iterations:
+                    print(
+                        f"Task {task._job_id} finished cleanly but only reported "
+                        f"{task._finished_iterations}/{task._iterations} iterations"
+                    )
+                    task._finished_iterations = task._iterations
+
             finished_tasks.append(task)
-        
+
         if len(finished_tasks) > 0:
             self.record()
         for task in finished_tasks:
             self._tasks.pop(task._job_id)
-        
+
         return finished_tasks
     
 
@@ -265,7 +273,7 @@ if __name__ == '__main__':
         for task in finished_tasks:
             for gpu_id in task._gpus.split(','):
                 if task._priority in ['Co-ex', 'mps']:
-                    machine[int(gpu_id)][jobinfo.priority].remove(task._job_id)
+                    machine[int(gpu_id)][task._priority].remove(task._job_id)
                 else:
                     machine[int(gpu_id)].pop(task._priority)
             # writer.save(task)

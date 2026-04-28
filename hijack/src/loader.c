@@ -713,6 +713,26 @@ entry_t nvml_library_entry[] = {
     {.name = "nvmlVgpuInstanceGetMdevUUID"},
 };
 
+static void *dlopen_with_fallback(const char *primary_filename,
+                                  const char *fallback_filename) {
+  void *table = dlopen(primary_filename, RTLD_NOW | RTLD_NODELETE);
+  if (likely(table)) {
+    return table;
+  }
+
+  LOGGER(4, "can't find library %s, falling back to %s", primary_filename,
+         fallback_filename);
+
+  table = dlopen(fallback_filename, RTLD_NOW | RTLD_NODELETE);
+  if (unlikely(!table)) {
+    LOGGER(FATAL, "can't find library %s or %s", primary_filename,
+           fallback_filename);
+  }
+
+  return table;
+}
+
+
 static void UNUSED bug_on() {
   BUILD_BUG_ON((sizeof(nvml_library_entry) / sizeof(nvml_library_entry[0])) !=
                NVML_ENTRY_END);
@@ -735,10 +755,7 @@ static void load_driver_libraries() {
            driver_version);
   driver_filename[FILENAME_MAX - 1] = '\0';
 
-  table = dlopen(driver_filename, RTLD_NOW | RTLD_NODELETE);
-  if (unlikely(!table)) {
-    LOGGER(FATAL, "can't find library %s", driver_filename);
-  }
+  table = dlopen_with_fallback(driver_filename, "/usr/lib64/libnvidia-ml.so.1");
 
   for (i = 0; i < NVML_ENTRY_END; i++) {
     nvml_library_entry[i].fn_ptr = dlsym(table, nvml_library_entry[i].name);
@@ -759,10 +776,7 @@ static void load_cuda_single_library(int idx) {
            driver_version);
   cuda_filename[FILENAME_MAX - 1] = '\0';
 
-  table = dlopen(cuda_filename, RTLD_NOW | RTLD_NODELETE);
-  if (unlikely(!table)) {
-    LOGGER(FATAL, "can't find library %s", cuda_filename);
-  }
+  table = dlopen_with_fallback(cuda_filename, "/usr/lib64/libcuda.so.1");
 
   cuda_library_entry[idx].fn_ptr = dlsym(table, cuda_library_entry[idx].name);
   if (unlikely(!cuda_library_entry[idx].fn_ptr)) {
@@ -785,10 +799,7 @@ void load_cuda_libraries() {
   cuda_filename[FILENAME_MAX - 1] = '\0';
   cuda_filename[FILENAME_MAX - 1] = '\0';
 
-  table = dlopen(cuda_filename, RTLD_NOW | RTLD_NODELETE);
-  if (unlikely(!table)) {
-    LOGGER(FATAL, "can't find library %s", cuda_filename);
-  }
+  table = dlopen_with_fallback(cuda_filename, "/usr/lib64/libcuda.so.1");
 
   for (i = 0; i < CUDA_ENTRY_END; i++) {
     cuda_library_entry[i].fn_ptr = dlsym(table, cuda_library_entry[i].name);
