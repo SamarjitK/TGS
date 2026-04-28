@@ -254,7 +254,7 @@ class Task(object):
             cmd = [
                 'docker', 'run', # '--rm',
                     '--name', self.container_name,
-                    '--gpus', f'"device={self._gpus}"',
+                    '--gpus', f'device={self._gpus}',
                     '--ipc', 'host',
                     '--network', 'host',
                     '--cap-add', 'sys_nice',

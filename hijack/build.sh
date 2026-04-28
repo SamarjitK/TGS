@@ -53,4 +53,37 @@ function build() {
     # docker build -t ${BASE_IMAGE} --network=host -f ./Dockerfile .
 }
 
-build
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+REPO_ROOT=$(cd "${ROOT}/.." && pwd -P)
+BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-bingyangwu2000/tf_torch}"
+
+if [[ "${INSIDE_TGS_BUILD:-0}" == "1" ]]; then
+    build
+    exit 0
+fi
+
+docker run --rm \
+    -u root \
+    --network host \
+    -v "${REPO_ROOT}:/workspace" \
+    -w /workspace/hijack \
+    -e INSIDE_TGS_BUILD=1 \
+    "${BUILDER_IMAGE}" \
+    bash -lc '
+        set -euo pipefail
+        # Try toolchain already present in image first.
+        if command -v cmake >/dev/null 2>&1 && \
+           command -v make >/dev/null 2>&1 && \
+           command -v gcc >/dev/null 2>&1 && \
+           command -v g++ >/dev/null 2>&1 && \
+           command -v patchelf >/dev/null 2>&1; then
+            ./build.sh
+            exit 0
+        fi
+
+        # Some older images ship stale NVIDIA apt sources that break apt update.
+        rm -f /etc/apt/sources.list.d/cuda*.list /etc/apt/sources.list.d/nvidia-ml*.list || true
+        apt-get update
+        apt-get install -y cmake make gcc g++ patchelf
+        ./build.sh
+    '

@@ -37,7 +37,7 @@ extern "C" {
 
 #define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2 * !!(condition)]))
 
-#define CAS(ptr, old, new) __sync_bool_compare_and_swap_8((ptr), (old), (new))
+#define CAS(ptr, old, new) __sync_bool_compare_and_swap((ptr), (old), (new))
 #define UNUSED __attribute__((unused))
 
 #define MILLISEC (1000UL * 1000UL)

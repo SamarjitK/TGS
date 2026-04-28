@@ -128,7 +128,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+#vscode
+.vscode/
+
 job_logs/
+tmpdebug/
+backup_logs/
 gsharing/
 results/*
 !.gitkeep

@@ -1,0 +1,19 @@
+# this requires py3.10
+
+# Core RPC / protobuf stack (version-aligned)
+protobuf==3.20.3
+grpcio==1.48.2
+grpcio-tools==1.48.2
+
+# NVIDIA runtime helpers
+nvidia-ml-py3
+
+# Build tooling (fixes pkg_resources issues)
+setuptools==65.5.1
+wheel
+
+# for plotting
+matplotlib
+
+# you'll need to turn off build isolation for this:
+# uv pip install -r requirements.txt --no-build-isolation
