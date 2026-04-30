@@ -41,8 +41,11 @@ static long long g_current_rate[GPU_MAX_NUM] = {};
 static int g_active_gpu[GPU_MAX_NUM] = {};
 static CUuuid g_uuid[GPU_MAX_NUM];
 static int g_gpu_id[GPU_MAX_NUM];
+static int g_debug_throttle_prints[GPU_MAX_NUM] = {};
+static int g_debug_sample_prints[GPU_MAX_NUM] = {};
 
-const long long LIMIT_INITIALIZER = 20000;
+const long long LIMIT_INITIALIZER = 2000000;
+const long long LIMIT_LOWER_BOUND = 1000000;
 const long long RATE_MIN = 1000;
 
 #define TGS_SLOW_START 0
@@ -216,6 +219,7 @@ static int open_listenfd(CUdevice device) {
   uuid_str[32] = 0;
 
   sprintf(SOCKET_PATH, "/etc/gsharing/rate_%s.sock", uuid_str);
+  fprintf(stderr, "[TGS-LP] listen socket %s\n", SOCKET_PATH);
 
   name.sun_family = AF_UNIX;
   strncpy(name.sun_path, SOCKET_PATH, sizeof(name.sun_path));
@@ -246,6 +250,7 @@ static int open_listenfd(CUdevice device) {
 }
 
 static void init_rate_limit(long long initial_value, volatile long long *p_rate_limit, int *p_state) {
+  fprintf(stderr, "init_rate_limit: initial_value=%lld\n", initial_value);
   *p_rate_limit = initial_value;
   *p_state = TGS_SLOW_START;
 }
@@ -313,8 +318,10 @@ static const long long update_rate_limit(int *p_state, CUdevice device, double r
     max_diff_counter = 0;
   }
 
-  rate_limit = (rate_limit <= 0) ? 0 : rate_limit;
+  rate_limit = (rate_limit <= LIMIT_LOWER_BOUND) ? LIMIT_LOWER_BOUND : rate_limit;
 
+  fprintf(stderr, "update_rate_limit from original_rate_limit=%lld to new_rate_limit=%lld, delta=%.6f, state=%d\n", g_rate_limit[device], rate_limit, delta, *p_state);
+  fprintf(stderr, "recv_rate=%.6f, max_rate=%.6f\n", recv_rate, max_rate);
   g_rate_limit[device] = rate_limit;
   return rate_limit;
 }
@@ -395,13 +402,16 @@ static void *limit_manager(void *v_device) {
     if ((ret = getnameinfo((const struct sockaddr *)&clientaddr, clientlen, client_hostname, MAXLINE,
                            client_port, MAXLINE, 0)) != 0)
       LOGGER(FATAL, "getnameinfo error: %s\n", gai_strerror(ret));
+    fprintf(stderr, "[TGS-LP] connected device=%d gpu=%d peer=%s:%s\n",
+            device, g_gpu_id[device], client_hostname, client_port);
     
     double max_rate = -1;
     if (rio_readn(connfd, (void *)&max_rate, sizeof(double)) != sizeof(double)) {
       continue;
     }
+    fprintf(stderr, "[TGS-LP] Received max_rate=%.6f\n", max_rate);
 
-    g_rate_limit[device] = 0;
+    g_rate_limit[device] = -1;
     g_rate_control_flag[device] = 1;
 
     double recv_rate = 1.;
@@ -446,7 +456,7 @@ profile:
         continue_flag = 1;
       }
     }
-    fprintf(stderr, "profile max rate: %lld\n", max_rate);
+    fprintf(stderr, "profile max rate: %.6f\n", max_rate);
 
     while (1) {
       double recv_counter = -1;
@@ -480,6 +490,8 @@ profile:
       ++cnt;
       if (cnt == 1) {
         init_rate_limit(LIMIT_INITIALIZER, &g_rate_limit[device], &state);
+        fprintf(stderr, "[TGS-LP] control on device=%d limit=%lld flag=%lld\n",
+                device, g_rate_limit[device], g_rate_control_flag[device]);
         continue;
       }
 
@@ -509,6 +521,8 @@ profile:
 
     g_rate_limit[device] = 0;
     activate_memory_transfer_routine(device);
+    fprintf(stderr, "[TGS-LP] disconnected device=%d gpu=%d peer=%s:%s\n",
+            device, g_gpu_id[device], client_hostname, client_port);
     g_rate_control_flag[device] = 0;
   }
 }
@@ -562,7 +576,9 @@ static void activate_limit_manager(CUdevice device) {
 
 
 static inline int launch_test(const long long kernel_size, const CUdevice device) {
-  return g_rate_control_flag[device] == 1 && g_rate_counter[device] > g_rate_limit[device];
+  return g_rate_control_flag[device] == 1 &&
+   g_rate_limit[device] > 0 &&
+   g_rate_counter[device] > g_rate_limit[device];
 }
 
 
@@ -575,6 +591,17 @@ static inline void rate_limiter(const long long kernel_size) {
 
   if (!g_active_gpu[device])
     initialization(device);
+
+  if (g_rate_control_flag[device] == 1 &&
+      g_rate_limit[device] > 0 &&
+      g_rate_counter[device] > g_rate_limit[device] &&
+      g_debug_throttle_prints[device] < 10) {
+    fprintf(stderr,
+            "[TGS-LP] throttle device=%d kernel=%lld counter=%lld limit=%lld current=%lld\n",
+            device, kernel_size, g_rate_counter[device], g_rate_limit[device],
+            g_current_rate[device]);
+    ++g_debug_throttle_prints[device];
+  }
 
   while (launch_test(kernel_size, device))
     nanosleep(&g_cycle, NULL);
@@ -596,6 +623,11 @@ static void *rate_watcher(void *v_device) {
     long long current_rate = g_rate_counter[device];
     g_rate_counter[device] = 0;
     g_current_rate[device] = current_rate;
+    if (g_debug_sample_prints[device] < 5) {
+      fprintf(stderr, "[TGS-LP] sample device=%d current_rate=%lld\n",
+              device, current_rate);
+      ++g_debug_sample_prints[device];
+    }
   }
   return NULL;
 }
@@ -638,6 +670,13 @@ static inline void initialization(const CUdevice device) {
   if (ret != CUDA_SUCCESS) {
     fprintf(stderr, "cuCtxSetLimit error, ret=%d\n", (int)ret);
   }
+
+  fprintf(stderr, "[TGS-LP] init device=%d gpu=%d uuid=%02x%02x%02x%02x...\n",
+          device, g_gpu_id[device],
+          (unsigned char)g_uuid[device].bytes[0],
+          (unsigned char)g_uuid[device].bytes[1],
+          (unsigned char)g_uuid[device].bytes[2],
+          (unsigned char)g_uuid[device].bytes[3]);
 
   activate_rate_watcher(device);
   activate_limit_manager(device);

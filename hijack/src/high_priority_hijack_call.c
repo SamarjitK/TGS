@@ -135,7 +135,7 @@ static inline void rate_estimator(const long long kernel_size) {
 
 static void *rate_monitor(void *v_device) {
   const CUdevice device = (uintptr_t)v_device;
-  const unsigned long duration = 5000;
+  const unsigned long duration = 500;
   const struct timespec unit_time = {
     .tv_sec = duration / 1000,
     .tv_nsec = duration % 1000 * MILLISEC,
@@ -181,7 +181,7 @@ inline double shift_window(double rate_window[], const int WINDOW_SIZE, double r
 
 static void *rate_watcher(void *v_device) {
   const CUdevice device = (uintptr_t)v_device;
-  const unsigned long duration = 5000;
+  const unsigned long duration = 500;
 
   const struct timespec unit_time = {
     .tv_sec = duration / 1000,
@@ -223,6 +223,8 @@ static void *rate_watcher(void *v_device) {
       else
         max_rate = max_window_rate;
     }
+
+    fprintf(stderr, "[TGS-HP] Sending max_rate=%.6f\n", max_rate);
     
     if (rio_writen(clientfd, (void *)&max_rate, sizeof(double)) != sizeof(double)) {
       LOGGER(4, "rio_writen error\n");
