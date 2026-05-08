@@ -35,7 +35,13 @@ class SchedulerServerForTrainer(TrainerToSchedulerServicer):
         assert 'ReportStats' in self._callbacks
         report_stats_impl = self._callbacks['ReportStats']
 
-        success = report_stats_impl(request.job_id, request.finished_iterations)
+        # ttft_ms/tpot_ms may be unset for non-inference workloads.
+        success = report_stats_impl(
+            request.job_id,
+            request.finished_iterations,
+            getattr(request, "ttft_ms", 0.0),
+            getattr(request, "tpot_ms", 0.0),
+        )
         response = ReportStatsResponse(success=success)
         
         return response

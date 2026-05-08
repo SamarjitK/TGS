@@ -32,10 +32,15 @@ class Trainer(object):
         self._report_interval = REPORT_INTERVAL
         LOG_FILE_PATH = os.getenv('TGS_LOG_FILE_PATH')
         self._fd = open(LOG_FILE_PATH, 'w') if LOG_FILE_PATH != None else None
+        self._first_iteration_time = None
+        self._last_iteration_time = None
     
 
     def update_stats(self, iteration_time):
         self._finished_iteraions += 1
+        if self._first_iteration_time is None:
+            self._first_iteration_time = iteration_time
+        self._last_iteration_time = iteration_time
         if self._fd != None:
             print('%lf %lf' % (time.time(), self._batch_size / iteration_time), file=self._fd)
 
@@ -45,7 +50,20 @@ class Trainer(object):
 
         if time.time() - self._last_report_time >= self._report_interval:
             self._last_report_time = time.time()
-            if self._client_for_scheduler.report_stats(self._job_id, self._finished_iteraions):
+            # For training workloads, these are proxies; inference workloads can
+            # override via their own trainer wrapper later.
+            ttft_ms = None
+            tpot_ms = None
+            if self._first_iteration_time is not None:
+                ttft_ms = self._first_iteration_time * 1000.0
+            if self._last_iteration_time is not None:
+                tpot_ms = self._last_iteration_time * 1000.0
+            if self._client_for_scheduler.report_stats(
+                self._job_id,
+                self._finished_iteraions,
+                ttft_ms=ttft_ms,
+                tpot_ms=tpot_ms,
+            ):
                 self._finished_iteraions = 0
 
 

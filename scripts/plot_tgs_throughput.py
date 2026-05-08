@@ -302,8 +302,9 @@ def main() -> int:
     parser.add_argument(
         "--smooth-window",
         type=int,
-        default=5,
-        help="Moving-average window for smoothing throughput lines; use 1 to disable.",
+        # changed from 5 to 1
+        default=1,
+        help="Moving-average window for smoothing throughput lines; default 1 disables smoothing.",
     )
     parser.add_argument(
         "--job",
@@ -322,7 +323,9 @@ def main() -> int:
         raise SystemExit("No worker report lines found in the supplied log files. Try backup_logs/test_tgs.log.")
 
     if not start_points:
-        raise SystemExit("No trainer start lines found in the supplied log files. Try job_logs/*.txt.")
+        start_points = []
+        print("No trainer start lines found in the supplied log files. Try job_logs/*.txt.")
+    
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     plot_points(points, start_points, args.output, args.title, args.smooth_window)

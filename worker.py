@@ -40,6 +40,26 @@ class Worker(object):
         self._server_for_trainer = self.make_server_for_trainer(worker_port)
 
         self._start_time = time.time()
+
+        self._latest_reports = {}
+        self._slo_enabled = os.getenv('TGS_SLO_MODE', '0') == '1'
+        self._slo_ratio = float(os.getenv('TGS_SLO_RATIO', '1.25'))
+        self._slo_sleep_seconds = float(os.getenv('TGS_SLO_SLEEP_MS', '120')) / 1000.0
+        self._slo_stale_seconds = float(os.getenv('TGS_SLO_STALE_SEC', '6'))
+
+        # Plain-text metrics (comma-separated): one row per ReportStats RPC, independent of Python logging.
+        # Set TGS_SLO_METRICS_PATH to enable. Optional TGS_REPORT_INTERVAL_SEC on the trainer lowers interval.
+        self._slo_metrics_path = os.getenv('TGS_SLO_METRICS_PATH')
+        self._slo_metrics_lock = threading.Lock()
+        self._slo_metrics_fp = None
+        if self._slo_metrics_path:
+            new_file = not os.path.exists(self._slo_metrics_path) or os.path.getsize(self._slo_metrics_path) == 0
+            self._slo_metrics_fp = open(self._slo_metrics_path, 'a', buffering=1, encoding='utf-8')
+            if new_file:
+                self._slo_metrics_fp.write(
+                    '# report: kind,unix_ts,job_id,throughput,finished_iterations,ttft_ms,tpot_ms\n'
+                    '# slo: kind,unix_ts,leader_job,lagger_job,leader_tp,lagger_tp,ratio,action\n'
+                )
     
 
     def parse_trace_config(self, trace_file_path):
@@ -127,6 +147,16 @@ class Worker(object):
                 root_path + ':/cluster',
                 '/tmp/nvidia-mps:/tmp/nvidia-mps',
             ],
+            'shared': [
+                root_path + ':/cluster',
+                root_path + '/hijack/low-priority-lib/libcontroller.so:/libcontroller.so:ro',
+                root_path + '/hijack/low-priority-lib/libcuda.so:/libcuda.so:ro',
+                root_path + '/hijack/low-priority-lib/libcuda.so.1:/libcuda.so.1:ro',
+                root_path + '/hijack/low-priority-lib/libnvidia-ml.so:/libnvidia-ml.so:ro',
+                root_path + '/hijack/low-priority-lib/libnvidia-ml.so.1:/libnvidia-ml.so.1:ro',
+                root_path + '/hijack/low-priority-lib/ld.so.preload:/etc/ld.so.preload:ro',
+                root_path + '/gsharing:/etc/gsharing',
+            ],
         }
 
 
@@ -196,14 +226,78 @@ class Worker(object):
         return utilizations
 
 
-    def _report_stats_impl(self, job_id, finished_iterations) -> bool:
+    def _append_slo_metrics_file(
+        self,
+        kind: str,
+        ts: float,
+        fields,
+    ):
+        """fields is a tuple/stringable sequence written as CSV continuation after fixed prefix."""
+        if self._slo_metrics_fp is None:
+            return
+        rest = ','.join(str(x) for x in fields)
+        line = f'{kind},{ts:.6f},{rest}\n'
+        with self._slo_metrics_lock:
+            self._slo_metrics_fp.write(line)
+
+    def _report_stats_impl(self, job_id, finished_iterations, ttft_ms=0.0, tpot_ms=0.0) -> bool:
         success = True
         assert job_id in self._tasks
         task = self._tasks[job_id]
         throughput = task.update(finished_iterations)
+        now = time.time()
+        self._latest_reports[job_id] = {
+            'throughput': throughput,
+            'priority': task._priority,
+            'timestamp': now,
+        }
 
         self._logger.info(f'worker, report, {job_id}, {throughput}, {task._finished_iterations}')
+        if ttft_ms or tpot_ms:
+            self._logger.info(f'worker, slo_metrics, {job_id}, ttft_ms={ttft_ms:.3f}, tpot_ms={tpot_ms:.3f}')
 
+        self._append_slo_metrics_file(
+            'report',
+            now,
+            (job_id, f'{throughput:.6f}', task._finished_iterations, f'{ttft_ms:.6f}', f'{tpot_ms:.6f}'),
+        )
+
+        if self._slo_enabled:
+            shared_reports = []
+            for report_job_id, report in self._latest_reports.items():
+                if report_job_id not in self._tasks:
+                    continue
+                if report['priority'] != 'shared':
+                    continue
+                if now - report['timestamp'] > self._slo_stale_seconds:
+                    continue
+                shared_reports.append((report_job_id, report['throughput']))
+
+            if len(shared_reports) >= 2:
+                leader_job, leader_tp = max(shared_reports, key=lambda item: item[1])
+                lagger_job, lagger_tp = min(shared_reports, key=lambda item: item[1])
+                ratio = leader_tp / max(lagger_tp, 1e-6)
+                action = 'none'
+                if job_id == leader_job and ratio >= self._slo_ratio:
+                    action = 'sleep'
+                    time.sleep(self._slo_sleep_seconds)
+                self._logger.info(
+                    f'worker, slo, leader={leader_job}, lagger={lagger_job}, '
+                    f'leader_tp={leader_tp:.3f}, lagger_tp={lagger_tp:.3f}, '
+                    f'ratio={ratio:.3f}, action={action}'
+                )
+                self._append_slo_metrics_file(
+                    'slo',
+                    now,
+                    (
+                        leader_job,
+                        lagger_job,
+                        f'{leader_tp:.6f}',
+                        f'{lagger_tp:.6f}',
+                        f'{ratio:.6f}',
+                        action,
+                    ),
+                )
         return success
 
 
@@ -234,6 +328,10 @@ class Worker(object):
 
 
     def close(self):
+        if self._slo_metrics_fp is not None:
+            with self._slo_metrics_lock:
+                self._slo_metrics_fp.close()
+                self._slo_metrics_fp = None
         self._writer.close()
 
 

@@ -38,11 +38,15 @@ class TrainerClientForScheduler(object):
     #         return False, None
     
 
-    def report_stats(self, job_id, finished_iterations):
+    def report_stats(self, job_id, finished_iterations, ttft_ms=None, tpot_ms=None):
         try:
             self._logger.info(f'job {job_id}, report, {finished_iterations}')
             with grpc.insecure_channel(self.addr) as channel:
                 request = ReportStatsRequest(job_id=job_id, finished_iterations=finished_iterations)
+                if ttft_ms is not None:
+                    request.ttft_ms = float(ttft_ms)
+                if tpot_ms is not None:
+                    request.tpot_ms = float(tpot_ms)
                 stub = t2s_rpc.TrainerToSchedulerStub(channel)
                 response = stub.ReportStats(request, timeout=1.0)
             assert response.success == True

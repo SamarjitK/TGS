@@ -18,6 +18,10 @@ message RegisterTrainerResponse {
 message ReportStatsRequest {
     uint32 job_id = 1;
     uint32 finished_iterations = 2;
+    // Optional SLO-facing metrics (used by inference workloads).
+    // Units: milliseconds.
+    double ttft_ms = 3;
+    double tpot_ms = 4;
 }
 
 message ReportStatsResponse {
