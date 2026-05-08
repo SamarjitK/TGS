@@ -1,0 +1,10 @@
+.git
+__pycache__
+*.sock
+*.log
+data
+datasets
+checkpoints
+results
+build
+dist

@@ -55,11 +55,19 @@ function build() {
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 REPO_ROOT=$(cd "${ROOT}/.." && pwd -P)
-BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-bingyangwu2000/tf_torch}"
+# BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-bingyangwu2000/tf_torch}"
+BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-tf_torch_fixed}"
 
 if [[ "${INSIDE_TGS_BUILD:-0}" == "1" ]]; then
     build
     exit 0
+fi
+
+# if tf_torch_fixed doesn't exist, build it locally.
+# Dockerfile is in root, so should just be docker build -t tf_torch_fixed .
+if ! docker image inspect "${BUILDER_IMAGE}" > /dev/null 2>&1; then
+    echo "Docker image ${BUILDER_IMAGE} not found locally. Building it now..."
+    docker build -t "${BUILDER_IMAGE}" --network=host -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
 fi
 
 docker run --rm \

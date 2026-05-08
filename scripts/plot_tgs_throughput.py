@@ -72,7 +72,7 @@ def load_priorities(trace_path: Path) -> Dict[int, str]:
     return priorities
 
 
-def expand_log_inputs(log_paths: Iterable[Path]) -> List[Path]:
+def expand_log_inputs(log_paths: Iterable[Path], job_filter: str | None = None) -> List[Path]:
     resolved: List[Path] = []
     for log_path in log_paths:
         if log_path.is_dir():
@@ -93,8 +93,12 @@ def expand_log_inputs(log_paths: Iterable[Path]) -> List[Path]:
         normalized = path.resolve() if path.exists() else path
         if normalized in seen:
             continue
+        # if a job filter is set, we don't want files from job_logs that don't match the filter (e.g. resnet50 or distilgpt2)
+        if job_filter is not None and path.parent.name == "job_logs" and not path.name.endswith(f"{job_filter}.txt"):
+            continue
         seen.add(normalized)
         unique_paths.append(path)
+    print(f"Found {len(unique_paths)} unique log files to parse: {', '.join(p.as_posix() for p in unique_paths)}")
     return unique_paths
 
 
@@ -301,10 +305,16 @@ def main() -> int:
         default=5,
         help="Moving-average window for smoothing throughput lines; use 1 to disable.",
     )
+    parser.add_argument(
+        "--job",
+        type=str,
+        default=None,
+        help="If set, only gather job logs that end with this string (e.g. resnet50 or distilgpt2).",
+    )
     args = parser.parse_args()
 
     priorities = load_priorities(args.trace)
-    log_paths = expand_log_inputs(args.logs)
+    log_paths = expand_log_inputs(args.logs, args.job)
     points = parse_worker_logs(log_paths, priorities)
     start_points = parse_start_times(log_paths, priorities)
 

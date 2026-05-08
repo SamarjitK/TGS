@@ -16,9 +16,11 @@ An overview of updates/changes to this repository:
     - `loader.c` - added the CUDA/NVML fallback loading so the hijack layer could find the real driver libs and not abort on startup.
     - `worker.py` - `check_tasks()` exits gracefully in both success and failure cases.
     - `trainer_client.py` - made report RPCs time-bounded and failure-tolerant so training did not hang behind scheduler connectivity problems.
+    - `build.sh` - added a check to build the custom docker image if it doesn't exist locally, to avoid runtime errors.
 - Additions:
     - `trainer.py` - you can now customize the `REPORT_INTERVAL` environment variable to specify how often you want the trainer to report stats to the scheduler. Increased it from the default 10 seconds to 2 seconds.
     - `plot_tgs_throughput.py` - a simple script to plot the throughput results from the test run.
+    - `scripts/`, `config/`, `workloads/` - added some new test scripts and associated workloads (see Run section below) to test our changes to TGS.
 
 ## 3. Python setup
 
@@ -38,13 +40,16 @@ Run the following commands:
 
 ```bash
 cd TGS
+docker build -t tf_torch_fixed .  # Build the custom docker image
 make rpc
 ./download.sh
 cd hijack
 ./build.sh
 ```
 
-The build script should also automatically pull in the docker image we need. If it doesn't, you can pull it manually with `docker pull bingyangwu2000/tf_torch`. There is also a `make clean` command to clean up the rpc artifacts if you want to start fresh.
+The build script now relies on an image built on top of `bingyangwu2000/tf_torch`, which has some extra dependencies pre-installed. In the future, we will create a custom image per type of workload (to avoid downloading at runtime), but for now these live in a unified image that we refer to as `tf_torch_fixed`. The modified `build.sh` *should* check if the image exists locally and build it if not.
+
+There is also a `make clean` command to clean up the rpc artifacts if you want to start fresh.
 
 ## 4. Run
 
@@ -56,4 +61,11 @@ This script will run the TGS system with the test configuration provided in `con
 
 If you run into docker issues between runs, make sure to remove any existing containers that will have the same name as the ones being created by the script. You can do this with `docker ps -a` to list all containers and `docker rm <container_name>` to remove any that are causing issues.
 
-You can also plot the results by running `uv run scripts/plot_tgs_throughput.py`, which will dump resulting plots in the `results/` directory. You can modify this script to plot different metrics or configurations as needed.
+We've started building out support for inference workloads, with scripts and description listed in the table below:
+
+| Script | Description |
+|--------|-------------|
+| `test_inference_tgs.sh` | Image inference |
+| `test_text_inference_tgs.sh` | Text generation |
+
+You can also plot the results by running `uv run scripts/plot_tgs_throughput.py`, which will dump resulting plots in the `results/` directory. You can modify this script to plot different metrics or configurations as needed. If you've run many types of tests, you will need to specify which files in `job_logs/` to read from by using a `--job` argument based on the model: for example `--job resnet50` or `--job distilgpt2`.

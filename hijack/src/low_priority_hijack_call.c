@@ -44,8 +44,10 @@ static int g_gpu_id[GPU_MAX_NUM];
 static int g_debug_throttle_prints[GPU_MAX_NUM] = {};
 static int g_debug_sample_prints[GPU_MAX_NUM] = {};
 
-const long long LIMIT_INITIALIZER = 2000000;
-const long long LIMIT_LOWER_BOUND = 1000000;
+// const long long LIMIT_INITIALIZER = 2000000; // for resnet50 training
+// const long long LIMIT_LOWER_BOUND = 1000000; // for resnet50 training
+const long long LIMIT_INITIALIZER = 100000; // for text inference
+const long long LIMIT_LOWER_BOUND = 50000; // for text inference
 const long long RATE_MIN = 1000;
 
 #define TGS_SLOW_START 0
@@ -250,7 +252,7 @@ static int open_listenfd(CUdevice device) {
 }
 
 static void init_rate_limit(long long initial_value, volatile long long *p_rate_limit, int *p_state) {
-  fprintf(stderr, "init_rate_limit: initial_value=%lld\n", initial_value);
+  fprintf(stderr, "[TGS-LP] init_rate_limit: initial_value=%lld\n", initial_value);
   *p_rate_limit = initial_value;
   *p_state = TGS_SLOW_START;
 }
@@ -320,8 +322,10 @@ static const long long update_rate_limit(int *p_state, CUdevice device, double r
 
   rate_limit = (rate_limit <= LIMIT_LOWER_BOUND) ? LIMIT_LOWER_BOUND : rate_limit;
 
-  fprintf(stderr, "update_rate_limit from original_rate_limit=%lld to new_rate_limit=%lld, delta=%.6f, state=%d\n", g_rate_limit[device], rate_limit, delta, *p_state);
-  fprintf(stderr, "recv_rate=%.6f, max_rate=%.6f\n", recv_rate, max_rate);
+  fprintf(stderr, "[TGS-LP] update_rate_limit from original_rate_limit=%lld to new_rate_limit=%lld, delta=%.6f, state=%d\n", g_rate_limit[device], rate_limit, delta, *p_state);
+  // also print current rate to check if kernels are even being detected
+  fprintf(stderr, "[TGS-LP] current_rate=%lld\n", g_current_rate[device]);
+  fprintf(stderr, "[TGS-LP] recv_rate=%.6f, max_rate=%.6f\n", recv_rate, max_rate);
   g_rate_limit[device] = rate_limit;
   return rate_limit;
 }
@@ -456,7 +460,7 @@ profile:
         continue_flag = 1;
       }
     }
-    fprintf(stderr, "profile max rate: %.6f\n", max_rate);
+    fprintf(stderr, "[TGS-LP] profile max rate: %.6f\n", max_rate);
 
     while (1) {
       double recv_counter = -1;
@@ -483,7 +487,7 @@ profile:
           double new_max_rate = max_window_rate * 1.025;
           max_rate = max_rate < new_max_rate ? max_rate : new_max_rate;
         }
-        fprintf(stderr, "change max rate: %lf\n", max_rate);
+        fprintf(stderr, "[TGS-LP] change max rate: %lf\n", max_rate);
         goto profile;
       }
 

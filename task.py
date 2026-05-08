@@ -115,6 +115,24 @@ class Task(object):
         return bash_cmd
 
 
+    def inference_imagenet(self):
+        # Inference workload - single GPU only
+        bash_cmd = f'python /cluster/workloads/pytorch_inference_imagenet.py --iterations {self._iterations} --batch-size {self._batch_size} --model {self._job_name}'
+        bash_cmd += f' --scheduler_ip {self._scheduler_ip}'
+        bash_cmd += f' --trainer_port {self.get_idle_port()}'
+        bash_cmd += f' --job_id {self._job_id}'
+        return bash_cmd
+
+
+    def text_inference(self):
+        # Minimal text inference workload
+        bash_cmd = f'python /cluster/workloads/text_inference_minimal.py --iterations {self._iterations} --model {self._job_name}'
+        bash_cmd += f' --scheduler_ip {self._scheduler_ip}'
+        bash_cmd += f' --trainer_port {self.get_idle_port()}'
+        bash_cmd += f' --job_id {self._job_id}'
+        return bash_cmd
+
+
     def espnet2(self):
         bash_cmd = f'cd /workspace/espnet/egs2/aishell/asr1; ./run.sh --lm_args "--lm_conf layer=48"'
         return bash_cmd
@@ -149,6 +167,7 @@ class Task(object):
 
     def run(self, mount: list):
         bash_cmd = ''
+        print(f"Running job {self._job_id} with name {self._job_name} on GPUs {self._gpus} with priority {self._priority}")
         if self._job_name == 'test_kill_restart':
             bash_cmd = self.test_kill_restart()
         elif self._job_name == 'gcn':
@@ -159,6 +178,14 @@ class Task(object):
             bash_cmd = self.dlrm()
         elif self._job_name == 'espnet2':
             bash_cmd = self.espnet2()
+        elif self._job_name.startswith('inference_'):
+            # Strip 'inference_' prefix and use inference workload
+            self._job_name = self._job_name[len('inference_'):]
+            bash_cmd = self.inference_imagenet()
+        elif self._job_name.startswith('text_'):
+            # text_<model> -> run minimal text inference workload
+            self._job_name = self._job_name[len('text_'):]
+            bash_cmd = self.text_inference()
         elif self._job_name in ['resnet50', 'resnet152', 'mobilenet_v2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0', 'shufflenet_v2_x2_0', 'resnet34', 'alexnet']:
             bash_cmd = self.imagenet()
         elif self._job_name[:14] == 'tf_benchmarks-':
