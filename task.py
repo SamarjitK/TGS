@@ -5,7 +5,7 @@ import utils
 
 
 class JobInfo(object):
-    def __init__(self, job_id, job_name, batch_size, iterations, num_gpus, priority, thread_percentage, image_name, antman_config, antman_status) -> None:
+    def __init__(self, job_id, job_name, batch_size, iterations, num_gpus, priority, thread_percentage, image_name, antman_config, antman_status, slo_config=None) -> None:
         super().__init__()
         assert num_gpus <= 2
 
@@ -20,6 +20,7 @@ class JobInfo(object):
         self.image_name = image_name
         self.antman_config = antman_config
         self.antman_status = antman_status
+        self.slo_config = slo_config or {}
 
 
 class Task(object):
@@ -43,6 +44,7 @@ class Task(object):
         self.last_time = time()
         self._antman_config = job_info.antman_config
         self._antman_status = job_info.antman_status
+        self._slo_config = job_info.slo_config
         self._idle_port = None
     
 
@@ -317,6 +319,9 @@ class Task(object):
         }
         if self.need_throughput == True:
             envs['TGS_LOG_FILE_PATH'] = '/cluster/results/' + self.container_name + '_' + self._job_name + '.txt'
+
+        for key, value in self._slo_config.items():
+            envs['TGS_' + key.upper()] = str(value)
         
         for key, value in envs.items():
             cmd += ['-e', key + '=' + value]

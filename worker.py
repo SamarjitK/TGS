@@ -14,6 +14,14 @@ from runtime.rpc import scheduler_server
 from task import Task, JobInfo
 
 
+SLO_TRACKING_FIELDS = (
+    'slo_group',
+    'slo_role',
+    'slo_target_tpot_ms',
+    'slo_initial_rate_limit',
+)
+
+
 class Worker(object):
     def __init__(self, trace_file_path: str, worker_ip, worker_port, gpus: str, mount: list, log_path: str, need_throughput) -> None:
         super().__init__()
@@ -100,6 +108,11 @@ class Worker(object):
             'image_name': job_spec['image_name'] if 'image_name' in job_spec else 'tf_torch',
             'antman_config': job_spec['antman_config'] if 'antman_config' in job_spec else None,
             'antman_status': job_spec['antman_status'] if 'antman_status' in job_spec else None,
+            'slo_config': {
+                field: job_spec.get(field)
+                for field in SLO_TRACKING_FIELDS
+                if job_spec.get(field)
+            },
         }
         
         self._submit_queue.append(spec)
@@ -355,7 +368,8 @@ if __name__ == '__main__':
     gpu_list = args.gpus.split(',')
     machine = [{
         'Co-ex': list(),
-        'mps': list()
+        'mps': list(),
+        'shared': list()
     } for i in range(len(gpu_list))]
     while len(worker._submit_queue) + len(worker._tasks) + len(runnable_tasks) > 0:
         while worker.has_ready_jobs():
@@ -363,14 +377,15 @@ if __name__ == '__main__':
             jobinfo = JobInfo(job_spec['job_id'], job_spec['model_name'], job_spec['batch_size'],
                  job_spec['iterations'], job_spec['num_gpus'], job_spec['priority'],
                  job_spec['thread_percentage'], job_spec['image_name'],
-                 job_spec['antman_config'], job_spec['antman_status']
+                 job_spec['antman_config'], job_spec['antman_status'],
+                 job_spec['slo_config']
                 )
             runnable_tasks.append(jobinfo)
 
         finished_tasks = worker.check_tasks()
         for task in finished_tasks:
             for gpu_id in task._gpus.split(','):
-                if task._priority in ['Co-ex', 'mps']:
+                if task._priority in ['Co-ex', 'mps', 'shared']:
                     machine[int(gpu_id)][task._priority].remove(task._job_id)
                 else:
                     machine[int(gpu_id)].pop(task._priority)
@@ -383,7 +398,7 @@ if __name__ == '__main__':
             for gpu_instance in machine:
                 if jobinfo.priority not in gpu_instance:
                     available_gpus += 1
-                elif jobinfo.priority in ['Co-ex', 'mps'] and len(gpu_instance[jobinfo.priority]) < 2:
+                elif jobinfo.priority in ['Co-ex', 'mps', 'shared'] and len(gpu_instance[jobinfo.priority]) < 2:
                     available_gpus += 1
             
             if available_gpus >= jobinfo.num_gpus:
@@ -393,7 +408,7 @@ if __name__ == '__main__':
                     if jobinfo.priority not in gpu_instance:
                         used_gpus.append(str(gpu_id))
                         gpu_instance[jobinfo.priority] = jobinfo.job_id
-                    elif jobinfo.priority in ['Co-ex', 'mps'] and len(gpu_instance[jobinfo.priority]) < 2:
+                    elif jobinfo.priority in ['Co-ex', 'mps', 'shared'] and len(gpu_instance[jobinfo.priority]) < 2:
                         used_gpus.append(str(gpu_id))
                         gpu_instance[jobinfo.priority].append(jobinfo.job_id)
                     

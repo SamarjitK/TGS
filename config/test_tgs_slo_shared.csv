@@ -1,0 +1,3 @@
+submit_time,model_name,batch_size,iterations,gpu_requests,priority,image_name,slo_group,slo_role,slo_target_tpot_ms,slo_initial_rate_limit
+0,resnet50,4,1000,1,shared,tf_torch_fixed,resnet50_pair,slow,50,100000
+0,resnet50,4,1000,1,shared,tf_torch_fixed,resnet50_pair,fast,50,100000

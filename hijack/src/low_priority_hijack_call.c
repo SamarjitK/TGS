@@ -50,6 +50,14 @@ const long long LIMIT_INITIALIZER = 100000; // for text inference
 const long long LIMIT_LOWER_BOUND = 50000; // for text inference
 const long long RATE_MIN = 1000;
 
+static int g_slo_config_loaded = 0;
+static int g_slo_enabled = 0;
+static int g_slo_is_slow = 0;
+static long long g_slo_initial_rate_limit = 0;
+static double g_slo_target_tpot_ms = 0.0;
+static const char *g_slo_group = NULL;
+static const char *g_slo_role = NULL;
+
 #define TGS_SLOW_START 0
 #define TGS_CONGESTION_AVOIDANCE 1
 
@@ -81,6 +89,66 @@ static void *memory_transfer_routine(CUdevice device);
 static void initialization();
 
 static const char *cuda_error(CUresult, const char **);
+
+static long long parse_env_long_long(const char *value, long long fallback) {
+  char *parse_end = NULL;
+  long long parsed;
+
+  if (value == NULL || value[0] == '\0')
+    return fallback;
+
+  errno = 0;
+  parsed = strtoll(value, &parse_end, 10);
+  if (errno != 0 || parse_end == value)
+    return fallback;
+
+  return parsed;
+}
+
+static double parse_env_double(const char *value, double fallback) {
+  char *parse_end = NULL;
+  double parsed;
+
+  if (value == NULL || value[0] == '\0')
+    return fallback;
+
+  errno = 0;
+  parsed = strtod(value, &parse_end);
+  if (errno != 0 || parse_end == value)
+    return fallback;
+
+  return parsed;
+}
+
+static void load_slo_config(void) {
+  const char *initial_rate_limit = NULL;
+  const char *target_tpot_ms = NULL;
+
+  if (g_slo_config_loaded)
+    return;
+
+  g_slo_group = getenv("TGS_SLO_GROUP");
+  g_slo_role = getenv("TGS_SLO_ROLE");
+  initial_rate_limit = getenv("TGS_SLO_INITIAL_RATE_LIMIT");
+  target_tpot_ms = getenv("TGS_SLO_TARGET_TPOT_MS");
+
+  g_slo_enabled = (g_slo_group != NULL || g_slo_role != NULL ||
+                   initial_rate_limit != NULL || target_tpot_ms != NULL);
+  g_slo_is_slow = (g_slo_role != NULL && strcmp(g_slo_role, "slow") == 0);
+  g_slo_initial_rate_limit =
+      parse_env_long_long(initial_rate_limit, LIMIT_INITIALIZER);
+  if (g_slo_initial_rate_limit <= 0)
+    g_slo_initial_rate_limit = LIMIT_INITIALIZER;
+  g_slo_target_tpot_ms = parse_env_double(target_tpot_ms, 0.0);
+  g_slo_config_loaded = 1;
+
+  fprintf(stderr,
+          "[TGS-LP] slo config enabled=%d group=%s role=%s is_slow=%d "
+          "target_tpot_ms=%.6f initial_rate_limit=%lld\n",
+          g_slo_enabled, g_slo_group ? g_slo_group : "none",
+          g_slo_role ? g_slo_role : "none", g_slo_is_slow,
+          g_slo_target_tpot_ms, g_slo_initial_rate_limit);
+}
 
 /*
  * memory transfer
@@ -493,7 +561,7 @@ profile:
 
       ++cnt;
       if (cnt == 1) {
-        init_rate_limit(LIMIT_INITIALIZER, &g_rate_limit[device], &state);
+        init_rate_limit(g_slo_initial_rate_limit, &g_rate_limit[device], &state);
         fprintf(stderr, "[TGS-LP] control on device=%d limit=%lld flag=%lld\n",
                 device, g_rate_limit[device], g_rate_control_flag[device]);
         continue;
@@ -508,7 +576,7 @@ profile:
       long long rate_limit;
       if(num_zero <= WINDOW_SIZE / 5 * 2 || cnt < 15){
         if(num_zero == 2 && cnt > 15){
-          rate_limit = LIMIT_INITIALIZER;
+          rate_limit = g_slo_initial_rate_limit;
           init_rate_limit(rate_limit, &g_rate_limit[device], &state);
         }
         else
@@ -653,6 +721,8 @@ static void activate_rate_watcher(CUdevice device) {
 
 static inline void initialization(const CUdevice device) {
   g_active_gpu[device] = 1;
+
+  load_slo_config();
 
   CUresult ret = CUDA_ENTRY_CALL(cuda_library_entry, cuDeviceGetUuid, &g_uuid[device], device);
   if (ret != CUDA_SUCCESS) {
