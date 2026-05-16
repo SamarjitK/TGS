@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atrainer_to_scheduler.proto\"R\n\x16RegisterTrainerRequest\x12\x12\n\ntrainer_ip\x18\x01 \x01(\t\x12\x14\n\x0ctrainer_port\x18\x02 \x01(\r\x12\x0e\n\x06job_id\x18\x03 \x01(\r\"*\n\x17RegisterTrainerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"A\n\x12ReportStatsRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\r\x12\x1b\n\x13\x66inished_iterations\x18\x02 \x01(\r\"&\n\x13ReportStatsResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\x98\x01\n\x12TrainerToScheduler\x12\x46\n\x0fRegisterTrainer\x12\x17.RegisterTrainerRequest\x1a\x18.RegisterTrainerResponse\"\x00\x12:\n\x0bReportStats\x12\x13.ReportStatsRequest\x1a\x14.ReportStatsResponse\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atrainer_to_scheduler.proto\"R\n\x16RegisterTrainerRequest\x12\x12\n\ntrainer_ip\x18\x01 \x01(\t\x12\x14\n\x0ctrainer_port\x18\x02 \x01(\r\x12\x0e\n\x06job_id\x18\x03 \x01(\r\"*\n\x17RegisterTrainerResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"c\n\x12ReportStatsRequest\x12\x0e\n\x06job_id\x18\x01 \x01(\r\x12\x1b\n\x13\x66inished_iterations\x18\x02 \x01(\r\x12\x0f\n\x07ttft_ms\x18\x03 \x01(\x01\x12\x0f\n\x07tpot_ms\x18\x04 \x01(\x01\"&\n\x13ReportStatsResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\x98\x01\n\x12TrainerToScheduler\x12\x46\n\x0fRegisterTrainer\x12\x17.RegisterTrainerRequest\x1a\x18.RegisterTrainerResponse\"\x00\x12:\n\x0bReportStats\x12\x13.ReportStatsRequest\x1a\x14.ReportStatsResponse\"\x00\x62\x06proto3')
 
 
 
@@ -59,9 +59,9 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _REGISTERTRAINERRESPONSE._serialized_start=114
   _REGISTERTRAINERRESPONSE._serialized_end=156
   _REPORTSTATSREQUEST._serialized_start=158
-  _REPORTSTATSREQUEST._serialized_end=223
-  _REPORTSTATSRESPONSE._serialized_start=225
-  _REPORTSTATSRESPONSE._serialized_end=263
-  _TRAINERTOSCHEDULER._serialized_start=266
-  _TRAINERTOSCHEDULER._serialized_end=418
+  _REPORTSTATSREQUEST._serialized_end=257
+  _REPORTSTATSRESPONSE._serialized_start=259
+  _REPORTSTATSRESPONSE._serialized_end=297
+  _TRAINERTOSCHEDULER._serialized_start=300
+  _TRAINERTOSCHEDULER._serialized_end=452
 # @@protoc_insertion_point(module_scope)

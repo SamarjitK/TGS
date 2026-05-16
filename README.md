@@ -18,7 +18,8 @@ An overview of updates/changes to this repository:
     - `trainer_client.py` - made report RPCs time-bounded and failure-tolerant so training did not hang behind scheduler connectivity problems.
     - `build.sh` - added a check to build the custom docker image if it doesn't exist locally, to avoid runtime errors.
 - Additions:
-    - `trainer.py` - you can now customize the `REPORT_INTERVAL` environment variable to specify how often you want the trainer to report stats to the scheduler. Increased it from the default 10 seconds to 2 seconds.
+    - `trainer.py` - you can now customize the `REPORT_INTERVAL` environment variable to specify how often you want the trainer to report stats to the scheduler. `TGS_REPORT_INTERVAL_SEC` is also supported for SLO-focused runs. Increased it from the default 10 seconds to 2 seconds.
+    - `worker.py` - can write plain-text SLO/report metrics to `TGS_SLO_METRICS_PATH`, separate from Python logging.
     - `plot_tgs_throughput.py` - a simple script to plot the throughput results from the test run.
     - `scripts/`, `config/`, `workloads/` - added some new test scripts and associated workloads (see Run section below) to test our changes to TGS.
 
@@ -51,7 +52,7 @@ The build script used to rely on an image built on top of `bingyangwu2000/tf_tor
 
 There is also a `make clean` command to clean up the rpc artifacts if you want to start fresh.
 
-## 4. Run
+## 5. Run
 
 This script will run the TGS system with the test configuration provided in `config/test_tgs.csv`. You can modify this file to test different configurations (start times, iterations, etc.)
 
@@ -70,3 +71,5 @@ We've started building out support for inference workloads, with scripts and des
 | `test_text_inference_vllm.sh` | Work in progress |
 
 You can also plot the results by running `uv run scripts/plot_tgs_throughput.py`, which will dump resulting plots in the `results/` directory. You can modify this script to plot different metrics or configurations as needed. If you've run many types of tests, you will need to specify which files in `job_logs/` to read from by using a `--job` argument based on the model: for example `--job resnet50` or `--job distilgpt2`.
+
+For SLO experiments, set `TGS_SLO_MODE=1` to enable shared-job leader/lagger comparison. Set `TGS_SLO_METRICS_PATH=/path/to/file.txt` to append comma-separated `report` and `slo` rows to a plain text file, which is easier to parse than the Python log stream. Lower `TGS_REPORT_INTERVAL_SEC` or `REPORT_INTERVAL` if you need trainers to send reports more often.

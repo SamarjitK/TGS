@@ -5,7 +5,7 @@ import utils
 import time
 import os
 
-REPORT_INTERVAL = 2.0
+REPORT_INTERVAL = float(os.getenv('TGS_REPORT_INTERVAL_SEC', os.getenv('REPORT_INTERVAL', '2.0')))
 
 
 class Trainer(object):
