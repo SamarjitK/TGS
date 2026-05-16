@@ -56,7 +56,7 @@ function build() {
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 REPO_ROOT=$(cd "${ROOT}/.." && pwd -P)
 # BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-bingyangwu2000/tf_torch}"
-BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-tf_torch_fixed}"
+BUILDER_IMAGE="${TGS_BUILDER_IMAGE:-tf_torch:fixed}"
 
 if [[ "${INSIDE_TGS_BUILD:-0}" == "1" ]]; then
     build
