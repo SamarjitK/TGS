@@ -48,7 +48,7 @@ RUN pip install --no-cache-dir \
     tqdm \
     scipy \
     datasets \
-    transformers==4.10.3
+    transformers==4.39.1
 
 # Proto/RPC stack (pinned to match requirements.txt for consistency)
 RUN pip install --no-cache-dir \
@@ -87,6 +87,8 @@ RUN echo "[step] Verifying torch imports" \
     && python -c "import torch, torchvision, torchaudio; print('torch', torch.__version__, 'cuda', torch.version.cuda); print('torchvision', torchvision.__version__); print('torchaudio', torchaudio.__version__)"
 
 RUN echo "[step] Final setup complete before LABEL/CMD"
+
+RUN pip install --no-cache-dir "numpy<2.0"
 
 # Horovod disabled for single-GPU setup.
 # RUN apt-get update && apt-get install -y --no-install-recommends \
