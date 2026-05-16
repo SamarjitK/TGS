@@ -173,6 +173,12 @@ class Task(object):
         bash_cmd += f' --job_id {self._job_id}'
         return bash_cmd
 
+    def text_infer_vllm(self):
+        bash_cmd = f'python /cluster/workloads/text_infer_vllm.py --prompts {self._iterations} --max_new_tokens {self._batch_size}'
+        bash_cmd += f' --scheduler_ip {self._scheduler_ip}'
+        bash_cmd += f' --trainer_port {self.get_idle_port()}'
+        bash_cmd += f' --job_id {self._job_id}'
+        return bash_cmd
 
     def run(self, mount: list):
         bash_cmd = ''
@@ -197,6 +203,8 @@ class Task(object):
             bash_cmd = self.text_inference()
         elif self._job_name == 'text-infer':
             bash_cmd = self.text_infer()
+        elif self._job_name == 'text-infer-vllm':
+            bash_cmd = self.text_infer_vllm()
         elif self._job_name in ['resnet50', 'resnet152', 'mobilenet_v2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0', 'shufflenet_v2_x2_0', 'resnet34', 'alexnet']:
             bash_cmd = self.imagenet()
         elif self._job_name[:14] == 'tf_benchmarks-':

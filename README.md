@@ -41,14 +41,14 @@ Run the following commands:
 
 ```bash
 cd TGS
-docker build -t tf_torch_fixed .  # Build the custom docker image
+docker build -f docker/fixed.Dockerfile -t tf_torch:fixed .  # Build the custom docker image
 make rpc
 ./download.sh
 cd hijack
 ./build.sh
 ```
 
-The build script now relies on an image built on top of `bingyangwu2000/tf_torch`, which has some extra dependencies pre-installed. In the future, we will create a custom image per type of workload (to avoid downloading at runtime), but for now these live in a unified image that we refer to as `tf_torch_fixed`. The modified `build.sh` *should* check if the image exists locally and build it if not.
+The build script used to rely on an image built on top of `bingyangwu2000/tf_torch`, which has some extra dependencies pre-installed. There is now some custome images (to avoid downloading at runtime) in the `docker/` directory, and the `build.sh` script now uses `tf_torch:fixed` as the base iamge, which you should build as shown above.
 
 There is also a `make clean` command to clean up the rpc artifacts if you want to start fresh.
 
@@ -68,6 +68,7 @@ We've started building out support for inference workloads, with scripts and des
 |--------|-------------|
 | `test_inference_tgs.sh` | Image inference |
 | `test_text_inference_tgs.sh` | Text generation |
+| `test_text_inference_vllm.sh` | Work in progress |
 
 You can also plot the results by running `uv run scripts/plot_tgs_throughput.py`, which will dump resulting plots in the `results/` directory. You can modify this script to plot different metrics or configurations as needed. If you've run many types of tests, you will need to specify which files in `job_logs/` to read from by using a `--job` argument based on the model: for example `--job resnet50` or `--job distilgpt2`.
 
