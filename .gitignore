@@ -138,3 +138,6 @@ gsharing/
 results/*
 !.gitkeep
 datasets/*
+
+# Local Hugging Face token file used by model image build helper, at docker/hf_token.txt
+docker/hf_token.txt

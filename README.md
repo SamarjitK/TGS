@@ -52,7 +52,20 @@ The build script used to rely on an image built on top of `bingyangwu2000/tf_tor
 
 There is also a `make clean` command to clean up the rpc artifacts if you want to start fresh.
 
-## 5. Run
+## 5. Docker setup
+
+There are docker images for specific workloads in the `/docker` directory that are required for some of the test scripts (check the associated `config/` files for details). The table below lists the image names, descriptions, and running instructions:
+
+| Image Name | Run Instructions | Description |
+|------------|------------------|-------------|
+| `tf_torch:latest` | `docker pull bingyangwu2000/tf_torch` | This is what the original TGS project uses. No longer necessary |
+| `tf_torch:base` | `docker build -f docker/base.Dockerfile -t tf_torch:base .` | Builds on this original image, implements speedup and also supports text inference. |
+| `tf_torch:fixed` | `docker build -f docker/fixed.Dockerfile -t tf_torch:fixed .` | The new base image, upgrades versioning to support modern inference engines |
+| `tf_torch:vllm` | `docker build -f docker/vllm.Dockerfile -t tf_torch:vllm .` | Builds on the fixed image, installs vllm. Not yet used for anything. |
+| `tf_torch:llamacpp` | `docker build -f docker/llamacpp.Dockerfile -t tf_torch:llamacpp .` | Builds on the fixed image, installs LLaMA.cpp. Used for text inference tests. |
+| `tf_torch:llamacpp-model` | `bash docker/build_llamacpp_model.sh` | See script for more details. Builds on the `llamacpp` image and installs a small LLaMA model (which can be specified). Place huggingface token in `docker/hf_token.txt` if private. |
+
+## 6. Run
 
 This script will run the TGS system with the test configuration provided in `config/test_tgs.csv`. You can modify this file to test different configurations (start times, iterations, etc.)
 
@@ -68,6 +81,7 @@ We've started building out support for inference workloads, with scripts and des
 |--------|-------------|
 | `test_inference_tgs.sh` | Image inference |
 | `test_text_inference_tgs.sh` | Text generation |
+| `test_text_inference_llamacpp.sh` | HF LLM inference with LLaMA.cpp |
 | `test_text_inference_vllm.sh` | Work in progress |
 
 You can also plot the results by running `uv run scripts/plot_tgs_throughput.py`, which will dump resulting plots in the `results/` directory. You can modify this script to plot different metrics or configurations as needed. If you've run many types of tests, you will need to specify which files in `job_logs/` to read from by using a `--job` argument based on the model: for example `--job resnet50` or `--job distilgpt2`.

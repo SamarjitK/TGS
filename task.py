@@ -46,12 +46,19 @@ class Task(object):
         self._antman_status = job_info.antman_status
         self._slo_config = job_info.slo_config
         self._idle_port = None
+        self._llamacpp_api_port = None
     
 
     def get_idle_port(self):
         if self._idle_port == None:
             self._idle_port = utils.find_free_port()
         return self._idle_port
+
+
+    def get_llamacpp_api_port(self):
+        if self._llamacpp_api_port is None:
+            self._llamacpp_api_port = utils.find_free_port()
+        return self._llamacpp_api_port
     
 
     def mounts(self, additional_mounts: list):
@@ -180,6 +187,14 @@ class Task(object):
         bash_cmd += f' --job_id {self._job_id}'
         return bash_cmd
 
+    def text_infer_llamacpp(self):
+        bash_cmd = f'python -u /cluster/workloads/text_inference_llamacpp.py --iterations {self._iterations} --max-new-tokens {self._batch_size}'
+        bash_cmd += f' --api-port {self.get_llamacpp_api_port()}'
+        bash_cmd += f' --scheduler_ip {self._scheduler_ip}'
+        bash_cmd += f' --trainer_port {self.get_idle_port()}'
+        bash_cmd += f' --job_id {self._job_id}'
+        return bash_cmd
+
     def run(self, mount: list):
         bash_cmd = ''
         print(f"Running job {self._job_id} with name {self._job_name} on GPUs {self._gpus} with priority {self._priority}")
@@ -205,6 +220,8 @@ class Task(object):
             bash_cmd = self.text_infer()
         elif self._job_name == 'text-infer-vllm':
             bash_cmd = self.text_infer_vllm()
+        elif self._job_name == 'text-infer-llamacpp':
+            bash_cmd = self.text_infer_llamacpp()
         elif self._job_name in ['resnet50', 'resnet152', 'mobilenet_v2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0', 'shufflenet_v2_x2_0', 'resnet34', 'alexnet']:
             bash_cmd = self.imagenet()
         elif self._job_name[:14] == 'tf_benchmarks-':
@@ -325,6 +342,21 @@ class Task(object):
             'GPU_CONFIG_FILE': '/gpu_config.json',
             'GPU_STATUS_FILE': '/gpu_status.json',
         }
+
+        # Optional passthrough knobs for llama.cpp-based workloads.
+        for key in [
+            'LLAMACPP_MODEL',
+            'LLAMACPP_PATH',
+            'LLAMACPP_SERVER_BIN',
+            'LLAMACPP_API_PORT',
+            'LLAMACPP_CTX_SIZE',
+            'LLAMACPP_PARALLEL',
+            'LLAMACPP_N_GPU_LAYERS',
+        ]:
+            val = os.getenv(key)
+            if val:
+                envs[key] = val
+
         if self.need_throughput == True:
             envs['TGS_LOG_FILE_PATH'] = '/cluster/results/' + self.container_name + '_' + self._job_name + '.txt'
 

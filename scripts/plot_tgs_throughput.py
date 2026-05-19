@@ -315,6 +315,9 @@ def main() -> int:
     args = parser.parse_args()
 
     priorities = load_priorities(args.trace)
+    logs = args.logs
+    if Path("job_logs").exists() and Path("job_logs") not in logs:
+        logs.append(Path("job_logs"))
     log_paths = expand_log_inputs(args.logs, args.job)
     points = parse_worker_logs(log_paths, priorities)
     start_points = parse_start_times(log_paths, priorities)
